@@ -7,3 +7,8 @@
 
 ### Job array version:
 * sbatch submit_extract_all.sl
+
+Testing:
+source setup_make_dataset.sh
+cd extract_ibd
+python extract_ibd_from_yasu.py

@@ -27,7 +27,7 @@ class RootTree():
         [ ch.SetBranchStatus(branchname, 1) for branchname in branches ]
         for branchname in branches:
             branchDict[branchname] = ch.GetBranch(branchname)
-            branchDict[branchname].SetAddress(branchPointers[branchname])
+            ch.SetBranchAddress(branchname, branchPointers[branchname])
         #return ch, branchDict, branchPointers, branches
         self.filename = filename
         self.treename = treename
@@ -42,19 +42,9 @@ class RootTree():
         self.current = {} # Dict containing data for current entry.
 
     def loadentry(self, i):
-        self.current = {}
         self.ch.LoadTree(i)
-        for branchname in self.branches:
-            self.branchDict[branchname].GetEntry(i)
-
-        for branchname in self.intbranches:
-            self.current[branchname] = self.branchPointers[branchname][0]
-        for branchname in self.floatbranches:
-            self.current[branchname] = self.branchPointers[branchname][0]
-        for branchname in self.fvectorbranches:
-            self.current[branchname] = np.array(self.branchPointers[branchname], dtype='float32')
-        for branchname in self.ivectorbranches:
-            self.current[branchname] = np.array(self.branchPointers[branchname], dtype='int')
+        self.ch.GetEntry(i)
+        self.current = Entry(self, True)
         return self.current
      
     def getentries(self):
@@ -86,6 +76,52 @@ class RootTree():
             return i
         raise Exception('Could not find d=%d tn=%d, biggest tn is %d' % (int(detector), int(triggerNumber),  self.branchPointers['triggerNumber'][0]))
         return None
+
+class Entry(dict):
+    '''This class stores the information in a TTree entry.
+
+       NOTE: It constructs each numpy array separately in a lazy fashion so
+       they are only built if needed.
+    '''
+    def __init__(self, parent_tree, lazy=True):
+        super(Entry, self).__init__(self)
+        self.parent = parent_tree
+        if lazy:
+            pass
+        else:
+            self.unlazyconstruct()
+
+    def unlazyconstruct(self):
+        parent = self.parent
+        for branchname in parent.branches:
+            self[branchname]
+
+    def __getitem__(self, key):
+        '''Fetch the item if it already exists, else construct it'''
+        parent = self.parent
+        if key in self:
+            return dict.__getitem__(self, key)
+        elif key in parent.intbranches:
+            val = parent.branchPointers[key][0]
+            dict.__setitem__(self, key, val)
+            return val
+        elif key in parent.floatbranches:
+            val = parent.branchPointers[key][0]
+            dict.__setitem__(self, key, val)
+            return val
+        elif key in parent.fvectorbranches:
+            val_orig = parent.branchPointers[key]
+            val = np.array(val_orig, dtype='float32')
+            dict.__setitem__(self, key, val)
+            return val
+        elif key in parent.ivectorbranches:
+            val_orig = parent.branchPointers[key]
+            val = np.array(val_orig, dtype='int')
+            dict.__setitem__(self, key, val)
+            return val
+        else:  # This will likely raise a KeyError
+            return dict.__getitem__(self, key)
+
 
 def getChargesTime(entry, preprocess_flag=True, dtype='float32'):
     ''' This function takes a readout entry and extracts the charge and time. '''
